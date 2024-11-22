@@ -4,19 +4,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace TCSA.OOP.LibraryManagementSystem
+namespace CodeReviews.Console.CodingTracker
 {
     internal enum MenuOption
     {
-        ViewBooks,
-        AddBook,
-        DeleteBook
+        ViewSessions,
+        CurrentCodingSession,
+        DeleteRecord,
+        GenerateReport
     }
 
-    internal enum ItemType
-    {
-        Book,
-        Magazine,
-        Newspaper
+    internal enum CurrentCodingSessionChoice { 
+        StartCurrentSession,
+        EndCurrentSession,
+        EditCurrentSessionTime
     }
 }
