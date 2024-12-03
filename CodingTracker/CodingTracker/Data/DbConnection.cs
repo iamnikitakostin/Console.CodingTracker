@@ -1,168 +1,467 @@
-﻿using CodeReviews.Console.CodingTracker.Controllers;
+﻿using CodingTracker.Controllers;
+using CodingTracker.Models;
+using Dapper;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 
-namespace CodeReviews.Console.CodingTracker.Data
+namespace CodingTracker.Data
 {
     public class DbConnection : ConsoleController
     {
         private static SqliteConnection _connection;
+        private static string? defaultConnection;
 
-        private DbConnection() { }
-
-        public static SqliteConnection GetConnection(bool isStart = false)
+        public class WeekReportModel
         {
+            public int Year { get; set; }
+            public int WeekNumber { get; set; }
+            public DateTime WeekStart { get; set; }
+            public DateTime WeekEnd { get; set; }
+            public int TotalDuration { get; set; }
+            public int Count { get; set; }
+        }
 
+        public class MonthReportModel
+        {
+            public string Month { get; set; }
+            public int Count { get; set; }
+            public int TotalDuration { get; set; }
+        }
 
+        public class YearReportModel
+        {
+            public int Year { get; set; }
+            public int Count { get; set; }
+            public int TotalDuration { get; set; }
+        }
+
+        public static SqliteConnection StartConnection()
+        {
             if (_connection == null)
             {
                 try
                 {
-                    var configuration = new ConfigurationBuilder()
-                   .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-                   .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                   .Build();
-
-                    string? dbPath = configuration["DatabaseSettings:DatabasePath"];
-                    _connection = new SqliteConnection($"Data Source={dbPath}");
+                    var connectionStringSettings = System.Configuration.ConfigurationManager.AppSettings["DefaultConnection"];
+                    defaultConnection = connectionStringSettings;
+                    _connection = new SqliteConnection(defaultConnection);
                     _connection.Open();
-                    SuccessMessage("The database has been connected.");
-
-                    if (isStart)
+                    if (_connection != null && _connection.State == System.Data.ConnectionState.Open)
                     {
-                        DbConnection.CreateTable("Sessions");
-                        //DbConnection.SeedData();
+                        CreateTable("Sessions");
+                        CreateTable("Goals");
+                        DbConnection.SeedData();
                     }
-
-
-                    _connection.Close();
                 }
-                catch (Exception ex) {
+                catch (Exception ex)
+                {
                     ErrorMessage("An error has been received:" + ex.Message);
                 }
-               
+                finally
+                {
+                    SuccessMessage("The database has been connected.");
+                    _connection?.Close();
+                }
             }
             return _connection;
         }
 
-        public static void CloseConnection()
+        public static bool CheckIfCurrentSessionExists()
         {
-            if (_connection != null)
+            using (_connection)
             {
-                _connection.Close();
-                _connection.Dispose();
-                _connection = null;
-                SuccessMessage("The database connection has been closed.");
+                try
+                {
+                    string query = "SELECT * FROM Sessions ORDER BY ID DESC LIMIT 1";
+                    CodingSession result = (CodingSession)_connection.Query<CodingSession>(query).FirstOrDefault();
+                    if (result.EndTime == null) return true;
+                    return false;
+                }
+                catch (Exception ex) {
+                    ErrorMessage($"There has been an error while getting the current session: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        public static List<CodingSession>? GetSessions()
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "SELECT * FROM Sessions";
+                    List<CodingSession> results = _connection.Query<CodingSession>(query).ToList();
+                    return results;
+                }
+                catch (Exception ex) {
+                    ErrorMessage($"There has been an error while showing all the records {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        public static int GetSessionsDurationsByPeriod(string startDate, string endDate)
+        {
+            using (_connection)
+            {
+                List<CodingSession> results = new List<CodingSession>();
+                try
+                {
+                    string query = @"SELECT
+                        Duration, EndTime FROM Sessions
+                        WHERE StartTime BETWEEN @startDate and @endDate;
+                    ";
+                    results = _connection.Query<CodingSession>(query, new { startDate, endDate }).ToList();
+                    int totalDurationInSecondsInPeriod = 0;
+                    foreach (CodingSession session in results) {
+                        if (session.EndTime == null) continue;
+                        totalDurationInSecondsInPeriod += session.Duration;
+                    }
+                    return totalDurationInSecondsInPeriod;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage(ex.Message);
+                    return 0;
+                }
+            }
+        }
+
+        public static void GetSessionsByPeriod(string period)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query;
+                    switch (period)
+                    {
+                        case "week":
+                            query = @"SELECT 
+                            strftime('%Y', substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Year,
+                            strftime('%W', substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS WeekNumber,
+                            date(substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12), 'weekday 0') AS WeekStart,
+                            date(substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12), 'weekday 0', '+6 days') AS WeekEnd,
+                            COUNT(id) AS Count,
+                            sum(Duration) AS TotalDuration
+                            FROM Sessions
+                            GROUP BY Year, WeekNumber
+                            ORDER BY TotalDuration DESC;";
+                            List<WeekReportModel> results = new List<WeekReportModel>();
+                            results = _connection.Query<WeekReportModel>(query).ToList();
+                            Table table = new Table();
+                            table.AddColumn(new TableColumn("Year/Week Number").Centered());
+                            table.AddColumn(new TableColumn("Week Start").Centered());
+                            table.AddColumn(new TableColumn("Week End").Centered());
+                            table.AddColumn(new TableColumn("Duration").Centered());
+                            table.AddColumn(new TableColumn("Sessions Count").Centered());
+                            foreach (WeekReportModel item in results)
+                            {
+                                table.AddRow($"{item.Year.ToString()}/{item.WeekNumber.ToString()}", item.WeekStart.ToString("dd.MM.yyyy"), item.WeekEnd.ToString("dd.MM.yyyy"),
+                                             TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
+                            }
+                            AnsiConsole.Write(table);
+                            break;
+                        case "month":
+                            query = @"
+                            SELECT 
+                                strftime('%d.%m.%Y %H:%M:%S', 
+                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Date,
+                                strftime('%m/%Y', 
+                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Month,
+                                COUNT(id) AS Count,
+                                SUM(Duration) AS TotalDuration
+                            FROM Sessions
+                            GROUP BY strftime('%m-%Y', 
+                                            substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12));
+                            ";
+                            List<MonthReportModel> monthResults = new List<MonthReportModel>();
+
+                            monthResults = _connection.Query<MonthReportModel>(query).ToList();
+                            Table monthTable = new Table();
+                            monthTable.AddColumn(new TableColumn("Month").Centered());
+                            monthTable.AddColumn(new TableColumn("Total Duration").Centered());
+                            monthTable.AddColumn(new TableColumn("Sessions Count").Centered());
+
+                            foreach (MonthReportModel item in monthResults)
+                            {
+                                monthTable.AddRow(item.Month.ToString(), TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
+                            }
+                            AnsiConsole.Write(monthTable);
+                            break;
+                        case "year":
+                            query = @"
+                            SELECT 
+                                strftime('%d.%m.%Y %H:%M:%S', 
+                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Date,
+                                strftime('%Y', 
+                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Year,
+                                COUNT(id) AS Count,
+                                SUM(Duration) AS TotalDuration
+                            FROM Sessions
+                            GROUP BY strftime('%Y', 
+                                            substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12));
+                            ";
+                            List<YearReportModel> yearResults = new List<YearReportModel>();
+
+                            yearResults = _connection.Query<YearReportModel>(query).ToList();
+                            Table yearTable = new Table();
+                            yearTable.AddColumn(new TableColumn("Month").Centered());
+                            yearTable.AddColumn(new TableColumn("Total Duration").Centered());
+                            yearTable.AddColumn(new TableColumn("Sessions Count").Centered());
+
+
+                            foreach (YearReportModel item in yearResults)
+                            {
+                                yearTable.AddRow(item.Year.ToString(), TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
+                            }
+                            AnsiConsole.Write(yearTable);
+                            break;
+                    }
+                    
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while showing all the records {ex.Message}");
+                    //return null;
+                }
+            }
+        }
+
+        public static CodingSession? GetCurrentSession()
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "SELECT * FROM Sessions ORDER BY ID DESC LIMIT 1";
+                    CodingSession result = (CodingSession)_connection.Query<CodingSession>(query).FirstOrDefault();
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while showing all the records {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        public static CodingSession? GetSession(string id)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "SELECT * FROM Sessions WHERE id=@id";
+                    CodingSession result = (CodingSession)_connection.QuerySingleOrDefault<CodingSession>(query, new {id});
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while getting the record {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        public static bool AddSession(CodingSession codingSession) {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "INSERT INTO Sessions (StartTime) VALUES (@StartTime)";
+                    _connection.Execute(query, new { codingSession.StartTime });
+                    return true;
+                } catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while adding a record: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+        public static bool UpdateSession(CodingSession codingSession) {
+            using (_connection) {
+                try 
+                {
+                    string query = "UPDATE Sessions SET startTime = @StartTime, endTime = @EndTime, duration = @Duration WHERE id=@Id";
+                    int rowAffected = _connection.Execute(query, new
+                    {
+                        StartTime = codingSession.StartTime,
+                        EndTime = codingSession.EndTime,
+                        Duration = codingSession.Duration,
+                        Id = codingSession.Id
+                    });
+                    if (rowAffected > 0) return true;
+                    return false;
+                } catch (Exception ex) {
+                    ErrorMessage($"There has been an error while executing a command: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        public static bool CheckIfSessionExists(string id)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "SELECT * FROM Sessions WHERE id = @id";
+                    int rowAffected = _connection.ExecuteScalar<int>(query, new { id });
+                    if (rowAffected != 0) return true;
+                    return false;
+                } catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while executing a command: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        public static bool DeleteSession(string id) {
+            using (_connection)
+            {
+                if (!CheckIfSessionExists(id)) return false;
+                try
+                {
+                    string query = "DELETE FROM Sessions WHERE id = @id";
+                    int rowAffected = _connection.Execute(query, new { id });
+                    if (rowAffected != 0) return true;
+
+                    return true;
+                } catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while executing a command: {ex.Message}");
+                    return false;
+                }
             }
         }
 
         public static void CreateTable(string name)
         {
-            try
+            using (_connection)
             {
-                var command = _connection.CreateCommand();
-                if (name == "Sessions")
+                try
                 {
-                    command.CommandText =
-                    @"
+                    var query = "";
+                    if (name == "Sessions")
+                    {
+                        query = @"
                         CREATE TABLE IF NOT EXISTS Sessions (
                             Id INTEGER PRIMARY KEY AUTOINCREMENT,
                             StartTime TEXT NOT NULL,
                             EndTime TEXT,
                             Duration INTEGER
                         )
+                        ";
+                        _connection.Execute(query);
+                    } else
+                    {
+                        query =
+                       @"
+                        CREATE TABLE IF NOT EXISTS Goals (
+                            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            PeriodInDays INTEGER NOT NULL,
+                            StartDate TEXT NOT NULL,
+                            DesiredLengthInSeconds INTEGER NOT NULL,
+                            IsActive INTEGER NOT NULL
+                        )
                     ";
-                    command.ExecuteNonQuery();
+                        _connection.Execute(query);
+                    }
+
                 }
-
+                catch (Exception ex)
+                {
+                    ErrorMessage("Error creating table: " + ex.Message);
+                }
             }
-            catch (Exception ex)
-            {
-                ErrorMessage("Error creating table: " + ex.Message);
-            }
-
         }
 
 
-        // ADD SEEDING LATER
-        //public static void SeedData()
-        //{
-        //    bool create = false;
-        //    using (var command = _connection.CreateCommand())
-        //    {
-        //        command.CommandText = "SELECT COUNT(*) FROM Habits";
-        //        long habitCount = (long)command.ExecuteScalar();
+        public static void SeedData()
+        {
+            using (_connection)
+            {
+                string query = "SELECT COUNT(*) FROM Sessions";
+                int sessionsCount = _connection.ExecuteScalar<int>(query);
 
-        //        if (habitCount == 0)
-        //        {
-        //            create = true;
-        //            Console.WriteLine("Seeding data into the Habits table.");
-        //            var random = new Random();
+                if (sessionsCount == 0)
+                {
+                    DisplayMessage("Seeding data into the Sessions table.");
+                    Random random = new Random();
 
-        //            for (int i = 0; i < 100; i++)
-        //            {
-        //                string habitName = $"Habit {i + 1}";
-        //                Frequency frequency = (Frequency)random.Next(0, 3); 
-        //                string frequencyString = frequency.ToString(); 
-        //                int timesPerPeriod = random.Next(1, 5);
-        //                string startDate = DateTime.Now.AddDays(-random.Next(0, 100)).ToString("yyyy-MM-dd");
+                    for (int i = 0; i < 20; i++)
+                    {
+                        DateTime startTime = DateTime.Now.AddDays(-random.Next(0, 100));
+                        DateTime endTime = (startTime.AddMinutes(random.Next(15, 250)));
+                        double duration = endTime.Subtract(startTime).TotalSeconds;
+                        object session = new { startTime = startTime.ToString(), endTime = endTime.ToString(), duration };
+                        query =
+                        @"
+                            INSERT INTO Sessions (StartTime, EndTime, Duration)
+                            VALUES (@startTime, @endTime, @duration)
+                        ";
+                        _connection.Execute(query, session);
+                    }
 
-        //                command.CommandText =
-        //                @"
-        //            INSERT INTO Habits (Name, Frequency, TimesPerPeriod, StartDate)
-        //            VALUES (@habitName, @frequency, @timesPerPeriod, @startDate)
-        //        ";
+                }
+            }
+        }
 
-        //                command.Parameters.Clear();
-        //                command.Parameters.AddWithValue("@habitName", habitName);
-        //                command.Parameters.AddWithValue("@frequency", frequencyString);
-        //                command.Parameters.AddWithValue("@timesPerPeriod", timesPerPeriod);
-        //                command.Parameters.AddWithValue("@startDate", startDate);
+        public static bool AddGoal(Goal goal)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "INSERT INTO Goals (PeriodInDays, DesiredLengthInSeconds, StartDate, IsActive) VALUES (@PeriodInDays, @DesiredLengthInSeconds, @StartDate, @IsActive)";
+                    _connection.Execute(query, new { goal.PeriodInDays, goal.StartDate, goal.DesiredLengthInSeconds, goal.IsActive });
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while adding a goal: {ex.Message}");
+                    return false;
+                }
+            }
+        }
 
-        //                command.ExecuteNonQuery();
-        //            }
-        //        }
-        //    }
+        public static bool DeleteGoal(string id)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "DELETE FROM Goals WHERE id = @id";
+                    int rowAffected = _connection.Execute(query, new { id });
+                    if (rowAffected != 0) return true;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while executing a command: {ex.Message}");
+                    return false;
+                }
+            }
+        }
 
-        //    if (create)
-        //    {
-        //        using (var command = _connection.CreateCommand())
-        //        {
-        //            command.CommandText = "SELECT Id, Name FROM Habits";
-        //            using (var reader = command.ExecuteReader())
-        //            {
-        //                while (reader.Read())
-        //                {
-        //                    int habitId = reader.GetInt32(0);
-        //                    string habitName = reader.GetString(1);
-
-        //                    using (var insertCommand = _connection.CreateCommand())
-        //                    {
-        //                        for (int j = 0; j < 10; j++)
-        //                        {
-        //                            string habitDate = DateTime.Now.AddDays(-new Random().Next(0, 30)).ToString("yyyy-MM-dd");
-
-        //                            insertCommand.CommandText =
-        //                            @"
-        //                        INSERT INTO Records (Name, HabitDate, HabitId)
-        //                        VALUES (@habitName, @habitDate, @habitId)
-        //                    ";
-
-        //                            insertCommand.Parameters.Clear();
-        //                            insertCommand.Parameters.AddWithValue("@habitName", habitName);
-        //                            insertCommand.Parameters.AddWithValue("@habitDate", habitDate);
-        //                            insertCommand.Parameters.AddWithValue("@habitId", habitId);
-
-        //                            insertCommand.ExecuteNonQuery();
-        //                        }
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
-
-
+        public static List<Goal>? GetGoals()
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "SELECT * FROM Goals";
+                    List<Goal> results = _connection.Query<Goal>(query).ToList();
+                    return results;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while showing all the goals: {ex.Message}");
+                    return null;
+                }
+            }
+        }
     }
 }

@@ -1,20 +1,24 @@
-﻿using Spectre.Console;
+﻿using CodingTracker.Controllers;
+using CodingTracker.Data;
+using Spectre.Console;
+using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CodeReviews.Console.CodingTracker
+namespace CodingTracker
 {
-    internal class UserInterface
+    internal class UserInterface : ConsoleController
     {
         //private readonly SessionsController _booksController = new();
 
-        internal void MainMenu() {
+        internal static void MainMenu()
+        {
             while (true)
             {
-                System.Console.Clear();
+                AnsiConsole.Clear();
 
                 var choice = AnsiConsole.Prompt(
                         new SelectionPrompt<MenuOption>()
@@ -22,10 +26,13 @@ namespace CodeReviews.Console.CodingTracker
                         .AddChoices(Enum.GetValues<MenuOption>()));
 
 
-
                 switch (choice)
                 {
                     case MenuOption.ViewSessions:
+                        CodingController.ViewSessions();
+                        break;
+                    case MenuOption.ViewGoals:
+                        GoalController.GetAll();
                         break;
                     case MenuOption.CurrentCodingSession:
                         var currentCodingSessionChoice = AnsiConsole.Prompt(
@@ -34,22 +41,54 @@ namespace CodeReviews.Console.CodingTracker
                             .AddChoices(Enum.GetValues<CurrentCodingSessionChoice>()));
                         switch (currentCodingSessionChoice)
                         {
-                            case CurrentCodingSessionChoice.StartCurrentSession:
+                            case CurrentCodingSessionChoice.StartSession:
+                                CodingController.StartSession();
                                 break;
-                            case CurrentCodingSessionChoice.EndCurrentSession:
+                            case CurrentCodingSessionChoice.EndSession:
+                                CodingController.EndSession();
                                 break;
-                            case CurrentCodingSessionChoice.EditCurrentSessionTime:
+                            case CurrentCodingSessionChoice.EditSession:
+                                CodingController.EditSession(true);
                                 break;
-                            default:
+                            case CurrentCodingSessionChoice.GoBack:
                                 break;
                         }
                         break;
+                    case MenuOption.AddGoal:
+                        GoalController.Add();
+                        break;
+                    case MenuOption.EditSession:
+                        CodingController.EditSession();
+                        break;
                     case MenuOption.DeleteRecord:
+                        CodingController.DeleteSession();
+                        break;
+                    case MenuOption.DeleteGoal:
+                        GoalController.Delete();
                         break;
                     case MenuOption.GenerateReport:
+                        GenerateReport.ByWeeks();
+                        GenerateReport.ByMonths();
+                        GenerateReport.ByYears();
+                        AnsiConsole.Console.Input.ReadKey(false);
                         break;
+                    case MenuOption.Quit:
+                        return;
                 }
             }
+        }
+
+        internal static bool CheckIfQuit(string input)
+        {
+            if (input == "q")
+            {
+                if (DbConnection.CheckIfCurrentSessionExists())
+                {
+                    CodingController.EndSession();
+                }
+                return true;
+            }
+            return false;
         }
     }
 }

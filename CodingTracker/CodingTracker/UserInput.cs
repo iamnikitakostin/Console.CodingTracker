@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CodeReviews.Console.CodingTracker
+namespace CodingTracker
 {
     internal class UserInput
     {

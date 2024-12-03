@@ -4,19 +4,33 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CodeReviews.Console.CodingTracker
+namespace CodingTracker
 {
     internal enum MenuOption
     {
         ViewSessions,
         CurrentCodingSession,
+        ViewGoals,
+        AddGoal,
         DeleteRecord,
-        GenerateReport
+        DeleteGoal,
+        EditSession,
+        GenerateReport,
+        Quit
     }
 
-    internal enum CurrentCodingSessionChoice { 
-        StartCurrentSession,
-        EndCurrentSession,
-        EditCurrentSessionTime
+    internal enum CurrentCodingSessionChoice
+    {
+        StartSession,
+        EndSession,
+        EditSession,
+        GoBack
+    }
+
+    internal enum EditSessionChoice
+    {
+        StartTime,
+        EndTime,
+        GoBack
     }
 }
