@@ -33,4 +33,21 @@ namespace CodingTracker
         EndTime,
         GoBack
     }
+
+    internal enum RecordsFilterPeriodMenu { 
+        All,
+        ByPeriod
+    }
+
+    internal enum RecordsFilterFieldMenu
+    {
+        Duration,
+        Date
+    }
+
+    internal enum RecordsFilterOrderMenu { 
+        Ascending,
+        Descending
+    }
+
 }

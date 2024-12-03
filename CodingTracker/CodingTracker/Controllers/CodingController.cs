@@ -1,7 +1,9 @@
 ﻿using CodingTracker.Data;
 using CodingTracker.Models;
 using Spectre.Console;
+using System;
 using System.Diagnostics;
+using static System.Collections.Specialized.BitVector32;
 
 namespace CodingTracker.Controllers
 {
@@ -127,7 +129,7 @@ namespace CodingTracker.Controllers
             }
         }
 
-        internal static string EditSessionReducer(string dateName, CodingSession session)
+        internal static string EditSessionReducer(string dateName, CodingSession? session)
         {
             string choice = AnsiConsole.Prompt(
                 new TextPrompt<string>($"Please, enter your new {dateName} in the format of DD.MM.YYYY HH:MM:SS: ")
@@ -158,16 +160,76 @@ namespace CodingTracker.Controllers
             {
                 return choice;
             }
-
-
         }
 
-        internal static void ViewSessions() {
+        internal static void ViewSessions(RecordsFilterPeriodMenu periodChoice = RecordsFilterPeriodMenu.All, RecordsFilterOrderMenu orderChoice = RecordsFilterOrderMenu.Ascending, RecordsFilterFieldMenu orderFieldChoice = RecordsFilterFieldMenu.Duration) {
             Console.Clear();
+            List<CodingSession>? sessions;
+            string order = "ASC";
+            if (orderChoice == RecordsFilterOrderMenu.Descending) order = "DESC";
+            if (periodChoice == RecordsFilterPeriodMenu.All) {
+                switch (orderFieldChoice)
+                {
+                    case RecordsFilterFieldMenu.Date:
+                        sessions = DbConnection.GetSessions($" ORDER BY StartTime {order}");
+                        break;
+                    default:
+                        sessions = DbConnection.GetSessions($" ORDER BY Duration {order}");
+                        break;
+                }
+                TableVisualizationEngine.VisualizeSessions(sessions);
+            } else
+            {
+                string startDate = AnsiConsole.Prompt(
+            new TextPrompt<string>($"Please, enter the start date for filtering in the format of DD.MM.YYYY: ")
+            .Validate(input =>
+            {
+                if (input.ToLower() == "q") return ValidationResult.Success();
+                DateTime newDate;
+                if (!DateTime.TryParseExact(input, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out newDate))
+                {
+                    return ValidationResult.Error("[red]Your date input is wrong, please change it according to the format, or type in Q and press Enter to exit.[/]");
+                }
+                return ValidationResult.Success();
+            })
+            );
 
-            List<CodingSession>? sessions = DbConnection.GetSessions();
-
-            TableVisualizationEngine.VisualizeSessions(sessions);
+                if (startDate == "q")
+                {
+                    return;
+                }
+                string endDate = AnsiConsole.Prompt(
+                    new TextPrompt<string>($"Please, enter the start date for filtering in the format of DD.MM.YYYY: ")
+                    .Validate(input =>
+                    {
+                        if (input.ToLower() == "q") return ValidationResult.Success();
+                        DateTime newDate;
+                        if (!DateTime.TryParseExact(input, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out newDate))
+                        {
+                            return ValidationResult.Error("[red]Your date input is wrong, please change it according to the format, or type in Q and press Enter to exit.[/]");
+                        }
+                        else if (newDate <= DateTime.Parse(startDate))
+                        {
+                            return ValidationResult.Error("[red]The end time of session cannot be before the start time, type in Q and press Enter to exit, or try again.[/]");
+                        }
+                        return ValidationResult.Success();
+                    })
+                    );
+                if (endDate == "q")
+                {
+                    return;
+                }
+                switch (orderFieldChoice)
+                {
+                    case RecordsFilterFieldMenu.Date:
+                        sessions = DbConnection.GetSessionsByPeriod(startDate, endDate, $" ORDER BY StartTime {order}");
+                        break;
+                    default:
+                        sessions = DbConnection.GetSessionsByPeriod(startDate, endDate, $" ORDER BY Duration {order}");
+                        break;
+                }
+                TableVisualizationEngine.VisualizeSessions(sessions);
+            }
         }
 
         internal static void DeleteSession()

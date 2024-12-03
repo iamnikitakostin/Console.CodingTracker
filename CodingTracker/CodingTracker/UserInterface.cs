@@ -29,7 +29,19 @@ namespace CodingTracker
                 switch (choice)
                 {
                     case MenuOption.ViewSessions:
-                        CodingController.ViewSessions();
+                        var periodChoice = AnsiConsole.Prompt(
+                                new SelectionPrompt<RecordsFilterPeriodMenu>()
+                                .Title("Please, choose the period filter: ")
+                                .AddChoices(Enum.GetValues<RecordsFilterPeriodMenu>()));
+                        var orderChoice = AnsiConsole.Prompt(
+                                new SelectionPrompt<RecordsFilterOrderMenu>()
+                                .Title("Please, choose how you would like to display the records: ")
+                                .AddChoices(Enum.GetValues<RecordsFilterOrderMenu>()));
+                        var orderFieldChoice = AnsiConsole.Prompt(
+                            new SelectionPrompt<RecordsFilterFieldMenu>()
+                            .Title("Please, choose the field you would like to sort with: ")
+                            .AddChoices(Enum.GetValues<RecordsFilterFieldMenu>()));
+                        CodingController.ViewSessions(periodChoice, orderChoice, orderFieldChoice);
                         break;
                     case MenuOption.ViewGoals:
                         GoalController.GetAll();

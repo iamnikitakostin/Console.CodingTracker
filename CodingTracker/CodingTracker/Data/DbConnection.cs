@@ -83,13 +83,13 @@ namespace CodingTracker.Data
             }
         }
 
-        public static List<CodingSession>? GetSessions()
+        public static List<CodingSession>? GetSessions(string order = "")
         {
             using (_connection)
             {
                 try
                 {
-                    string query = "SELECT * FROM Sessions";
+                    string query = $"SELECT * FROM Sessions{order};";
                     List<CodingSession> results = _connection.Query<CodingSession>(query).ToList();
                     return results;
                 }
@@ -123,6 +123,33 @@ namespace CodingTracker.Data
                 {
                     ErrorMessage(ex.Message);
                     return 0;
+                }
+            }
+        }
+
+        public static List<CodingSession> GetSessionsByPeriod(string startDate, string endDate, string order="")
+        {
+            using (_connection)
+            {
+                List<CodingSession> results = new List<CodingSession>();
+                try
+                {
+                    string query = @"
+                        SELECT Id, Duration, StartTime, EndTime 
+                        FROM Sessions
+                        WHERE StartTime BETWEEN @startDate AND @endDate
+                    ";
+                    if (!string.IsNullOrWhiteSpace(order))
+                    {
+                        query += order; // Ensure `order` is sanitized.
+                    }
+                    results = _connection.Query<CodingSession>(query, new { startDate, endDate }).ToList();
+                    return results;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage(ex.Message);
+                    return results;
                 }
             }
         }
