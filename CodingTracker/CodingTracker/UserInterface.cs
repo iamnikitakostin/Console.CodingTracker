@@ -12,20 +12,15 @@ namespace CodingTracker
 {
     internal class UserInterface : ConsoleController
     {
-        //private readonly SessionsController _booksController = new();
-
         internal static void MainMenu()
         {
             while (true)
             {
                 AnsiConsole.Clear();
-
                 var choice = AnsiConsole.Prompt(
                         new SelectionPrompt<MenuOption>()
                         .Title("What do you want to do next?")
                         .AddChoices(Enum.GetValues<MenuOption>()));
-
-
                 switch (choice)
                 {
                     case MenuOption.ViewSessions:

@@ -25,7 +25,6 @@ namespace CodingTracker
             table.AddColumn(new TableColumn("Hours/Day to Achieve Goal").Centered());
             table.AddColumn(new TableColumn("Active").Centered());
             return table;
-
         }
 
         static public void VisualizeSessions(List<CodingSession> sessions)
@@ -46,8 +45,6 @@ namespace CodingTracker
             AnsiConsole.Console.Input.ReadKey(false);
         }
 
-        static public void VisualizeReport() { }
-
         static public void VisualizeSession(string id) {
             CodingSession? session = DbConnection.GetSession(id);
             if (session == null) return;
@@ -58,33 +55,22 @@ namespace CodingTracker
 
         static public void VisualizeGoals(List<Goal> goals)
         {
-            try
-            {
                 if (goals == null) return;
                 Table table = PrepareTable("goals");
                 foreach (Goal goal in goals)
                 {
                     double daysLeft = Math.Round((goal.PeriodInDays - (double)(DateTime.Now - DateTime.Parse(goal.StartDate)).TotalDays), 1);
-                    int totalDurationOfSessionUntilNow = DbConnection.GetSessionsDurationsByPeriod(DateTime.Parse(goal.StartDate).ToString("dd.MM.yyyy HH:mm:ss"), DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"));
+                    int totalDurationOfSessionUntilNow = DbConnection.GetSessionsDurationsByPeriod(DateTime.Parse(goal.StartDate).ToString("yyyy-MM-dd HH:mm:ss"), DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                     int leftToAchieve = (goal.DesiredLengthInSeconds - totalDurationOfSessionUntilNow) / 60 / 60;
                     if (leftToAchieve <= 0 && goal.IsActive)
                     {
-                        //update goal to inactive
-                        table.AddRow(goal.Id.ToString(), $"{daysLeft} days", $"{goal.DesiredLengthInSeconds / 60 / 60} hours", $"{leftToAchieve} hours", $"{Math.Round((leftToAchieve /daysLeft), 2)} hours", goal.IsActive.ToString());
+                        goal.IsActive = false;
+                        DbConnection.UpdateGoal(goal);
                     }
-                    else
-                    {
-                        table.AddRow(goal.Id.ToString(), $"{daysLeft} days", $"{goal.DesiredLengthInSeconds / 60 / 60} hours", $"{leftToAchieve} hours", $"{Math.Round((leftToAchieve / daysLeft), 2)} hours", goal.IsActive.ToString());
-                    }
-
+                    table.AddRow(goal.Id.ToString(), $"{daysLeft} days", $"{goal.DesiredLengthInSeconds / 60 / 60} hours", $"{leftToAchieve} hours", $"{Math.Round((leftToAchieve / daysLeft), 2)} hours", goal.IsActive.ToString());
                 }
                 AnsiConsole.Write(table);
                 AnsiConsole.Console.Input.ReadKey(false);
-            }
-            catch (Exception ex) {
-                Console.WriteLine(ex.Message);
-            }
-            
         }
     }
 }

@@ -1,9 +1,7 @@
 ﻿using CodingTracker.Data;
 using CodingTracker.Models;
 using Spectre.Console;
-using System;
 using System.Diagnostics;
-using static System.Collections.Specialized.BitVector32;
 
 namespace CodingTracker.Controllers
 {
@@ -17,17 +15,15 @@ namespace CodingTracker.Controllers
                 ErrorMessage("There is already an active session. Please, finish it before starting a new one.");
                 return;
             }
-            string currentTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
+            string currentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             _timer.Start();
             CodingSession newSession = new() { StartTime = currentTime};
             DbConnection.AddSession(newSession);
-
             AnsiConsole.MarkupLine("Press [yellow]Q[/] to finish the session");
             AnsiConsole.MarkupLine("\n\nFOCUS TIME!!!\n\n");
             Table table = new Table();
             table.AddColumn("Current Session");
             table.AddEmptyRow();
-
             AnsiConsole.Live(table)
                 .AutoClear(true)
                 .Start(ctx =>
@@ -41,7 +37,6 @@ namespace CodingTracker.Controllers
                     } while (!(Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q));
             });
             EndSession();
-
         }
         internal static void EndSession() {
             bool isCurrentSesssionActive = DbConnection.CheckIfCurrentSessionExists();
@@ -50,7 +45,7 @@ namespace CodingTracker.Controllers
                 ErrorMessage("There is no active session now. Please, start one.");
                 return;
             }
-            string currentTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
+            string currentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             CodingSession currentSession = DbConnection.GetCurrentSession();
             currentSession.EndTime = currentTime;
             currentSession.Duration = GetDurationOfSession(currentSession.StartTime, currentSession.EndTime);
@@ -81,7 +76,6 @@ namespace CodingTracker.Controllers
                 ViewSessions();
                 string choice = AnsiConsole.Prompt(
                 new TextPrompt<string>("Please, enter the id of the session you would like to edit."));
-
                 if (DbConnection.GetSession(choice) != null)
                 {
                     EditSessionChoices(choice);
@@ -91,7 +85,6 @@ namespace CodingTracker.Controllers
                     ErrorMessage($"There is no session with an id of {choice}");
                 }
             }
-            
         }
 
         internal static void EditSessionChoices(string id = "current")
@@ -132,12 +125,12 @@ namespace CodingTracker.Controllers
         internal static string EditSessionReducer(string dateName, CodingSession? session)
         {
             string choice = AnsiConsole.Prompt(
-                new TextPrompt<string>($"Please, enter your new {dateName} in the format of DD.MM.YYYY HH:MM:SS: ")
+                new TextPrompt<string>($"Please, enter your new {dateName} in the format of YYYY-MM-DD HH:MM:SS: ")
                 .Validate(input =>
                 {
                     if (input.ToLower() == "q") return ValidationResult.Success();
                     DateTime newDate;
-                    if (!DateTime.TryParseExact(input, "dd.MM.yyyy HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out newDate))
+                    if (!DateTime.TryParseExact(input, "yyyy-MM-dd HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out newDate))
                     {
                         return ValidationResult.Error("[red]Your date input is wrong, please change it according to the format, or type in Q and press Enter to exit.[/]");
                     }
@@ -171,6 +164,7 @@ namespace CodingTracker.Controllers
                 switch (orderFieldChoice)
                 {
                     case RecordsFilterFieldMenu.Date:
+                        Console.WriteLine("sorted by date");
                         sessions = DbConnection.GetSessions($" ORDER BY StartTime {order}");
                         break;
                     default:
@@ -181,12 +175,12 @@ namespace CodingTracker.Controllers
             } else
             {
                 string startDate = AnsiConsole.Prompt(
-            new TextPrompt<string>($"Please, enter the start date for filtering in the format of DD.MM.YYYY: ")
+            new TextPrompt<string>($"Please, enter the start date for filtering in the format of YYYY-MM-DD: ")
             .Validate(input =>
             {
                 if (input.ToLower() == "q") return ValidationResult.Success();
                 DateTime newDate;
-                if (!DateTime.TryParseExact(input, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out newDate))
+                if (!DateTime.TryParseExact(input, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out newDate))
                 {
                     return ValidationResult.Error("[red]Your date input is wrong, please change it according to the format, or type in Q and press Enter to exit.[/]");
                 }
@@ -199,12 +193,12 @@ namespace CodingTracker.Controllers
                     return;
                 }
                 string endDate = AnsiConsole.Prompt(
-                    new TextPrompt<string>($"Please, enter the start date for filtering in the format of DD.MM.YYYY: ")
+                    new TextPrompt<string>($"Please, enter the start date for filtering in the format of YYYY-MM-DD: ")
                     .Validate(input =>
                     {
                         if (input.ToLower() == "q") return ValidationResult.Success();
                         DateTime newDate;
-                        if (!DateTime.TryParseExact(input, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out newDate))
+                        if (!DateTime.TryParseExact(input, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out newDate))
                         {
                             return ValidationResult.Error("[red]Your date input is wrong, please change it according to the format, or type in Q and press Enter to exit.[/]");
                         }

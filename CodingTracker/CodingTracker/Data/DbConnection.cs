@@ -11,30 +11,6 @@ namespace CodingTracker.Data
         private static SqliteConnection _connection;
         private static string? defaultConnection;
 
-        public class WeekReportModel
-        {
-            public int Year { get; set; }
-            public int WeekNumber { get; set; }
-            public DateTime WeekStart { get; set; }
-            public DateTime WeekEnd { get; set; }
-            public int TotalDuration { get; set; }
-            public int Count { get; set; }
-        }
-
-        public class MonthReportModel
-        {
-            public string Month { get; set; }
-            public int Count { get; set; }
-            public int TotalDuration { get; set; }
-        }
-
-        public class YearReportModel
-        {
-            public int Year { get; set; }
-            public int Count { get; set; }
-            public int TotalDuration { get; set; }
-        }
-
         public static SqliteConnection StartConnection()
         {
             if (_connection == null)
@@ -141,7 +117,7 @@ namespace CodingTracker.Data
                     ";
                     if (!string.IsNullOrWhiteSpace(order))
                     {
-                        query += order; // Ensure `order` is sanitized.
+                        query += order;
                     }
                     results = _connection.Query<CodingSession>(query, new { startDate, endDate }).ToList();
                     return results;
@@ -164,16 +140,18 @@ namespace CodingTracker.Data
                     switch (period)
                     {
                         case "week":
-                            query = @"SELECT 
-                            strftime('%Y', substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Year,
-                            strftime('%W', substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS WeekNumber,
-                            date(substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12), 'weekday 0') AS WeekStart,
-                            date(substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12), 'weekday 0', '+6 days') AS WeekEnd,
-                            COUNT(id) AS Count,
-                            sum(Duration) AS TotalDuration
+                            query = @"
+                            SELECT 
+                                strftime('%Y', StartTime) AS Year,
+                                strftime('%W', StartTime) AS WeekNumber,
+                                date(StartTime, 'weekday 0') AS WeekStart,
+                                date(StartTime, 'weekday 0', '+6 days') AS WeekEnd,
+                                COUNT(id) AS Count,
+                                SUM(Duration) AS TotalDuration
                             FROM Sessions
                             GROUP BY Year, WeekNumber
-                            ORDER BY TotalDuration DESC;";
+                            ORDER BY TotalDuration DESC;                            
+                            ";
                             List<WeekReportModel> results = new List<WeekReportModel>();
                             results = _connection.Query<WeekReportModel>(query).ToList();
                             Table table = new Table();
@@ -184,7 +162,7 @@ namespace CodingTracker.Data
                             table.AddColumn(new TableColumn("Sessions Count").Centered());
                             foreach (WeekReportModel item in results)
                             {
-                                table.AddRow($"{item.Year.ToString()}/{item.WeekNumber.ToString()}", item.WeekStart.ToString("dd.MM.yyyy"), item.WeekEnd.ToString("dd.MM.yyyy"),
+                                table.AddRow($"{item.Year.ToString()}/{item.WeekNumber.ToString()}", item.WeekStart, item.WeekEnd,
                                              TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
                             }
                             AnsiConsole.Write(table);
@@ -192,24 +170,21 @@ namespace CodingTracker.Data
                         case "month":
                             query = @"
                             SELECT 
-                                strftime('%d.%m.%Y %H:%M:%S', 
-                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Date,
-                                strftime('%m/%Y', 
-                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Month,
+                                strftime('%Y.%m.%d %H:%M:%S', StartTime) AS Date,
+                                strftime('%m', StartTime) AS Month,
+                                strftime('%Y', StartTime) AS Year,
                                 COUNT(id) AS Count,
                                 SUM(Duration) AS TotalDuration
                             FROM Sessions
-                            GROUP BY strftime('%m-%Y', 
-                                            substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12));
+                            GROUP BY Year, Month
+                            ORDER BY TotalDuration DESC
                             ";
                             List<MonthReportModel> monthResults = new List<MonthReportModel>();
-
                             monthResults = _connection.Query<MonthReportModel>(query).ToList();
                             Table monthTable = new Table();
                             monthTable.AddColumn(new TableColumn("Month").Centered());
                             monthTable.AddColumn(new TableColumn("Total Duration").Centered());
                             monthTable.AddColumn(new TableColumn("Sessions Count").Centered());
-
                             foreach (MonthReportModel item in monthResults)
                             {
                                 monthTable.AddRow(item.Month.ToString(), TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
@@ -219,25 +194,20 @@ namespace CodingTracker.Data
                         case "year":
                             query = @"
                             SELECT 
-                                strftime('%d.%m.%Y %H:%M:%S', 
-                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Date,
-                                strftime('%Y', 
-                                        substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12)) AS Year,
+                                strftime('%Y.%m.%d %H:%M:%S', StartTime) AS Date,
+                                strftime('%Y', StartTime) AS Year,
                                 COUNT(id) AS Count,
                                 SUM(Duration) AS TotalDuration
                             FROM Sessions
-                            GROUP BY strftime('%Y', 
-                                            substr(StartTime, 7, 4) || '-' || substr(StartTime, 4, 2) || '-' || substr(StartTime, 1, 2) || ' ' || substr(StartTime, 12));
+                            GROUP BY Year
+                            ORDER BY TotalDuration DESC;
                             ";
                             List<YearReportModel> yearResults = new List<YearReportModel>();
-
                             yearResults = _connection.Query<YearReportModel>(query).ToList();
                             Table yearTable = new Table();
                             yearTable.AddColumn(new TableColumn("Month").Centered());
                             yearTable.AddColumn(new TableColumn("Total Duration").Centered());
                             yearTable.AddColumn(new TableColumn("Sessions Count").Centered());
-
-
                             foreach (YearReportModel item in yearResults)
                             {
                                 yearTable.AddRow(item.Year.ToString(), TimeController.ConvertFromSeconds(item.TotalDuration), item.Count.ToString());
@@ -245,12 +215,10 @@ namespace CodingTracker.Data
                             AnsiConsole.Write(yearTable);
                             break;
                     }
-                    
                 }
                 catch (Exception ex)
                 {
                     ErrorMessage($"There has been an error while showing all the records {ex.Message}");
-                    //return null;
                 }
             }
         }
@@ -306,6 +274,7 @@ namespace CodingTracker.Data
                 }
             }
         }
+
         public static bool UpdateSession(CodingSession codingSession) {
             using (_connection) {
                 try 
@@ -313,10 +282,10 @@ namespace CodingTracker.Data
                     string query = "UPDATE Sessions SET startTime = @StartTime, endTime = @EndTime, duration = @Duration WHERE id=@Id";
                     int rowAffected = _connection.Execute(query, new
                     {
-                        StartTime = codingSession.StartTime,
-                        EndTime = codingSession.EndTime,
-                        Duration = codingSession.Duration,
-                        Id = codingSession.Id
+                        codingSession.StartTime,
+                        codingSession.EndTime,
+                        codingSession.Duration,
+                        codingSession.Id
                     });
                     if (rowAffected > 0) return true;
                     return false;
@@ -405,25 +374,22 @@ namespace CodingTracker.Data
             }
         }
 
-
         public static void SeedData()
         {
             using (_connection)
             {
                 string query = "SELECT COUNT(*) FROM Sessions";
                 int sessionsCount = _connection.ExecuteScalar<int>(query);
-
                 if (sessionsCount == 0)
                 {
-                    DisplayMessage("Seeding data into the Sessions table.");
+                    AnsiConsole.WriteLine("Seeding data into the Sessions table.");
                     Random random = new Random();
-
                     for (int i = 0; i < 20; i++)
                     {
                         DateTime startTime = DateTime.Now.AddDays(-random.Next(0, 100));
                         DateTime endTime = (startTime.AddMinutes(random.Next(15, 250)));
                         double duration = endTime.Subtract(startTime).TotalSeconds;
-                        object session = new { startTime = startTime.ToString(), endTime = endTime.ToString(), duration };
+                        object session = new { startTime = startTime.ToString("yyyy-MM-dd HH:mm:ss"), endTime = endTime.ToString("yyyy-MM-dd HH:mm:ss"), duration };
                         query =
                         @"
                             INSERT INTO Sessions (StartTime, EndTime, Duration)
@@ -431,7 +397,27 @@ namespace CodingTracker.Data
                         ";
                         _connection.Execute(query, session);
                     }
+                }
 
+                query = "SELECT COUNT(*) FROM Goals";
+                int goalsCount = _connection.ExecuteScalar<int>(query);
+                if (goalsCount == 0)
+                {
+                    AnsiConsole.WriteLine ("Seeding data into the Goals table.");
+                    Random random = new Random();
+                    for (int i = 1; i < 5; i++)
+                    {
+                        DateTime startTime = DateTime.Now;
+                        int periodInDays = i * random.Next(10, 30);
+                        int desiredDuration = random.Next(3000,300000);
+                        bool isActive = true;
+                        query =
+                        @"
+                            INSERT INTO Goals (PeriodInDays, StartDate, DesiredLengthInSeconds, IsActive)
+                            VALUES (@periodInDays, @startTime, @desiredDuration, @isActive)
+                        ";
+                        _connection.Execute(query, new { periodInDays, startTime, desiredDuration, isActive });
+                    }
                 }
             }
         }
@@ -464,6 +450,32 @@ namespace CodingTracker.Data
                     int rowAffected = _connection.Execute(query, new { id });
                     if (rowAffected != 0) return true;
                     return true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage($"There has been an error while executing a command: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        public static bool UpdateGoal(Goal goal)
+        {
+            using (_connection)
+            {
+                try
+                {
+                    string query = "UPDATE Goals SET StartDate = @StartDate, PeriodInDays = @PeriodInDays, IsActive = @IsActive, desiredLengthInSeconds = @DesiredLengthInSeconds WHERE id=@Id";
+                    int rowAffected = _connection.Execute(query, new
+                    {
+                        goal.StartDate,
+                        goal.PeriodInDays,
+                        goal.DesiredLengthInSeconds,
+                        goal.IsActive,
+                        goal.Id
+                    });
+                    if (rowAffected > 0) return true;
+                    return false;
                 }
                 catch (Exception ex)
                 {

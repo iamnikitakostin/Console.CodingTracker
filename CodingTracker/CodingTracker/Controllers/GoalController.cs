@@ -22,16 +22,15 @@ namespace CodingTracker.Controllers
                 int hours = AnsiConsole.Prompt(
                 new TextPrompt<int>("Please, enter the desired amount of hours you would like to code for in the mentioned period:"));
                 string dateInput = AnsiConsole.Prompt(
-                    new TextPrompt<string>("Please, enter the start date of the goal ([yellow]MM.DD.YYYY[/]):")
+                    new TextPrompt<string>("Please, enter the start date of the goal ([yellow]YYYY-MM-DD[/]):")
                         .Validate(date =>
                         {
                             if (DateOnly.TryParse(date, out _))
                                 return ValidationResult.Success();
-                            return ValidationResult.Error("[red]Invalid date format. Please use MM.DD.YYYY.[/]");
+                            return ValidationResult.Error("[red]Invalid date format. Please use YYYY-MM-DD.[/]");
                         }));
-
-                DateOnly date = DateOnly.ParseExact(dateInput, "MM.dd.yyyy");
-                goal.StartDate = date.ToString("dd.MM.yyyy");
+                DateOnly date = DateOnly.ParseExact(dateInput, "yyyy-MM-dd");
+                goal.StartDate = date.ToString("yyyy-MM-dd");
                 goal.DesiredLengthInSeconds = hours * 60 * 60;
                 goal.PeriodInDays = numberOfDays;
                 goal.IsActive = true;
