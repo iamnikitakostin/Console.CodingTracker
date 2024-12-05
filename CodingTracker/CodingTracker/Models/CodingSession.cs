@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace CodingTracker.Models
+﻿namespace CodingTracker.Models
 {
     public class CodingSession
     {

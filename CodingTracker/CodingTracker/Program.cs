@@ -1,5 +1,4 @@
-﻿using CodingTracker.Controllers;
-using CodingTracker.Data;
+﻿using CodingTracker.Data;
 
 namespace CodingTracker
 {
