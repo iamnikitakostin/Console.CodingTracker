@@ -8,28 +8,42 @@ namespace CodingTracker
     {
         internal static void MainMenu()
         {
+            var periodChoices = EnumToDisplayNames<RecordsFilterPeriodMenu>();
+            var orderChoices = EnumToDisplayNames<RecordsFilterOrderMenu>();
+            var orderFieldChoices = EnumToDisplayNames<RecordsFilterFieldMenu>();
+            var sessionChoices = EnumToDisplayNames<CurrentCodingSessionChoice>();
+            var menuOptions = EnumToDisplayNames<MenuOption>();
+
             while (true)
             {
                 AnsiConsole.Clear();
                 var choice = AnsiConsole.Prompt(
                         new SelectionPrompt<MenuOption>()
                         .Title("What do you want to do next?")
-                        .AddChoices(Enum.GetValues<MenuOption>()));
+                        .AddChoices(menuOptions.Keys)
+                        .UseConverter(option => menuOptions[option])
+                        );
                 switch (choice)
                 {
                     case MenuOption.ViewSessions:
                         var periodChoice = AnsiConsole.Prompt(
                                 new SelectionPrompt<RecordsFilterPeriodMenu>()
                                 .Title("Please, choose the period filter: ")
-                                .AddChoices(Enum.GetValues<RecordsFilterPeriodMenu>()));
+                                .AddChoices(periodChoices.Keys)
+                                .UseConverter(option => periodChoices[option])
+                                );
                         var orderChoice = AnsiConsole.Prompt(
                                 new SelectionPrompt<RecordsFilterOrderMenu>()
                                 .Title("Please, choose how you would like to display the records: ")
-                                .AddChoices(Enum.GetValues<RecordsFilterOrderMenu>()));
+                                .AddChoices(orderChoices.Keys)
+                                .UseConverter(option => orderChoices[option])
+                                );
                         var orderFieldChoice = AnsiConsole.Prompt(
                             new SelectionPrompt<RecordsFilterFieldMenu>()
                             .Title("Please, choose the field you would like to sort with: ")
-                            .AddChoices(Enum.GetValues<RecordsFilterFieldMenu>()));
+                            .AddChoices(orderFieldChoices.Keys)
+                            .UseConverter(option => orderFieldChoices[option])
+                             );
                         CodingController.ViewSessions(periodChoice, orderChoice, orderFieldChoice);
                         break;
                     case MenuOption.ViewGoals:
@@ -39,7 +53,9 @@ namespace CodingTracker
                         var currentCodingSessionChoice = AnsiConsole.Prompt(
                             new SelectionPrompt<CurrentCodingSessionChoice>()
                             .Title("Select the type of item:")
-                            .AddChoices(Enum.GetValues<CurrentCodingSessionChoice>()));
+                            .AddChoices(sessionChoices.Keys)
+                            .UseConverter(option => sessionChoices[option])
+                            );
                         switch (currentCodingSessionChoice)
                         {
                             case CurrentCodingSessionChoice.StartSession:
@@ -90,6 +106,22 @@ namespace CodingTracker
                 return true;
             }
             return false;
+        }
+
+        static Dictionary<TEnum, string> EnumToDisplayNames<TEnum>() where TEnum : struct, Enum
+        {
+            return Enum.GetValues(typeof(TEnum))
+                .Cast<TEnum>()
+                .ToDictionary(
+                    value => value,
+                    value => SplitCamelCase(value.ToString())
+                );
+        }
+
+        internal static string SplitCamelCase(string input)
+        {
+            return string.Join(" ", System.Text.RegularExpressions.Regex
+                .Split(input, @"(?<!^)(?=[A-Z])"));
         }
     }
 }
